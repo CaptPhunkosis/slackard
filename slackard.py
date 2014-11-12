@@ -108,6 +108,12 @@ class Slackard(object):
         messages.reverse()
         return [m for m in messages if m['ts'] != oldest]
 
+    def _fetch_user_info(self, user_id):
+        r = self.slack.users.info(user_id)
+        assert(r.successful)
+        return r.body['user']
+
+
     def speak(self, message, paste=False):
         if paste:
             message = '```{0}```'.format(message)
@@ -172,9 +178,12 @@ class Slackard(object):
                     print(message['text'])
                     for f in self.firehoses:
                         f(message['text'])
-                    for (f, matcher) in self.subscribers:
+                    for (f, matcher, include_user_info) in self.subscribers:
                         if matcher.search(message['text']):
-                            f(message['text'])
+                            if include_user_info:
+                                f(message['text'], self._fetch_user_info(message['user']))
+                            else:
+                                f(message['text'])
                     m = cmd_matcher.match(message['text'])
                     if m:
                         cmd, args = m.groups()
@@ -182,7 +191,7 @@ class Slackard(object):
                             if command == cmd:
                                 f(args)
 
-    def subscribe(self, pattern):
+    def subscribe(self, pattern, include_user_info=False):
         if hasattr(pattern, '__call__'):
             raise TypeError('Must supply pattern string')
 
@@ -193,7 +202,7 @@ class Slackard(object):
 
             try:
                 matcher = re.compile(pattern, re.IGNORECASE)
-                self.subscribers.append((_f, matcher))
+                self.subscribers.append((_f, matcher, include_user_info))
             except:
                 print('Failed to compile matcher for {0}'.format(wrapped))
             return _f
