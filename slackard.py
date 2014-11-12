@@ -10,6 +10,7 @@ import re
 import slacker
 import sys
 import time
+import traceback
 import yaml
 
 
@@ -108,7 +109,7 @@ class Slackard(object):
         messages.reverse()
         return [m for m in messages if m['ts'] != oldest]
 
-    def _fetch_user_info(self, user_id):
+    def fetch_user_info(self, user_id):
         r = self.slack.users.info(user_id)
         assert(r.successful)
         return r.body['user']
@@ -175,15 +176,12 @@ class Slackard(object):
                             continue
                     except KeyError:
                         pass
-                    print(message['text'])
+
                     for f in self.firehoses:
-                        f(message['text'])
-                    for (f, matcher, include_user_info) in self.subscribers:
+                        f(message['text'], message)
+                    for (f, matcher) in self.subscribers:
                         if matcher.search(message['text']):
-                            if include_user_info:
-                                f(message['text'], self._fetch_user_info(message['user']))
-                            else:
-                                f(message['text'])
+                            f(message['text'], message)
                     m = cmd_matcher.match(message['text'])
                     if m:
                         cmd, args = m.groups()
@@ -191,7 +189,7 @@ class Slackard(object):
                             if command == cmd:
                                 f(args)
 
-    def subscribe(self, pattern, include_user_info=False):
+    def subscribe(self, pattern):
         if hasattr(pattern, '__call__'):
             raise TypeError('Must supply pattern string')
 
@@ -202,7 +200,7 @@ class Slackard(object):
 
             try:
                 matcher = re.compile(pattern, re.IGNORECASE)
-                self.subscribers.append((_f, matcher, include_user_info))
+                self.subscribers.append((_f, matcher))
             except:
                 print('Failed to compile matcher for {0}'.format(wrapped))
             return _f
@@ -285,6 +283,7 @@ def main():
             bot._init_connection()
         except Exception as e:
             print('Unhandled exception: {}'.format(e.message))
+            print(traceback.format_exc())
             sys.exit(1)
 
 

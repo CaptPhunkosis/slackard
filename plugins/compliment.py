@@ -1,5 +1,6 @@
 from . import bot
 
-@bot.subscribe('^.compliment', include_user_info=True)
-def compliment(message, user_info):
-    bot.speak("Gee <@%s>...you're pretty swell." % user_info["id"])
+@bot.subscribe('^.compliment')
+def compliment(message, args):
+    user_info = bot.fetch_user_info(args['user'])
+    bot.speak("Gee <@%s>...you're pretty swell. Can I still call you %s?" % (user_info["id"], user_info['real_name']))
