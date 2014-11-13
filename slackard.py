@@ -38,6 +38,7 @@ class Slackard(object):
     subscribers = []
     commands = []
     firehoses = []
+    events = {}
 
     def __init__(self, config_file):
         self.config = Config(config_file)
@@ -138,6 +139,17 @@ class Slackard(object):
         info = self.slack.channels.info(channel=self.chan_id)
         return info.body['channel']
 
+    def add_periodic_event(self, f, interval, name):
+        assert name is not None, "A name for the event is required"
+        assert name not in self.events, "That event already exists"
+        new_event = {"action":f, "interval":interval, "last_run": time.time()+interval}
+        self.events[name] = new_event
+
+    def remove_periodic_event(self, name):
+        if name in self.events:
+            print("DONE")
+            self.events.pop(name)
+
     def run(self):
         self._init_connection()
         self._import_plugins()
@@ -188,6 +200,15 @@ class Slackard(object):
                         for (f, command) in self.commands:
                             if command == cmd:
                                 f(args)
+
+            for event, event_data in self.events.iteritems():
+                if event_data["last_run"] + event_data["interval"] < time.time():
+                    try:
+                        event_data["action"]()
+                        event_data["last_run"] = time.time()
+                    except Exception as e:
+                        print("Error Executing Event %s" % event)
+                        print(traceback.format_exc())
 
     def subscribe(self, pattern):
         if hasattr(pattern, '__call__'):
@@ -274,6 +295,7 @@ def main():
             bot.run()
         except SlackardFatalError as e:
             print('Fatal error: {}'.format(e.message))
+            print(traceback.format_exc())
             sys.exit(1)
         except SlackardNonFatalError as e:
             print('Non-fatal error: {}'.format(e.message))
